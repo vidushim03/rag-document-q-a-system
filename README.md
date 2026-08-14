@@ -82,15 +82,14 @@ python main.py
 
 ## Deploy to Streamlit Community Cloud
 
-The app is ready to deploy from this repository. Local on-disk Qdrant does not work on the cloud (the filesystem is ephemeral), so you must point the app at a Qdrant Cloud cluster.
+The app is ready to deploy from this repository. Uploaded documents are stored in-memory for the current session, so nothing needs to persist on the cloud.
 
-1. Create a free Qdrant Cloud cluster at <https://cloud.qdrant.io> and note the cluster URL and API key.
-2. Push this repository to GitHub (see below).
-3. On <https://share.streamlit.io>, click **Create app**, connect your GitHub repo, and set the main file to `app.py`.
-4. In **Advanced settings**:
+1. Push this repository to GitHub (see below).
+2. On <https://share.streamlit.io>, click **Create app**, connect your GitHub repo, and set the main file to `app.py`.
+3. In **Advanced settings**:
    - Set **Python version** to `3.12` (Community Cloud ignores `runtime.txt`).
-   - Paste the contents of `.streamlit/secrets.toml.example` into **Secrets**, filling in your real `GROQ_API_KEY`, `TAVILY_API_KEY`, `QDRANT_URL`, and `QDRANT_API_KEY`. Secrets are injected as environment variables, which is how the app reads them.
-5. Deploy. `packages.txt` installs `tesseract-ocr` and `poppler-utils` for OCR support.
+   - Paste the contents of `.streamlit/secrets.toml.example` into **Secrets**, filling in your real `GROQ_API_KEY` (and optionally `TAVILY_API_KEY`). Secrets are injected as environment variables, which is how the app reads them.
+4. Deploy. `packages.txt` installs `tesseract-ocr` and `poppler-utils` for OCR support.
 
 Create the GitHub repo and push from PowerShell:
 
