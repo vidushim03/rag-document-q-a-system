@@ -1,4 +1,3 @@
-import atexit
 import json
 import os
 import tempfile
@@ -12,8 +11,8 @@ from src.chunker import chunk_data
 from src.data_loader import load_pdf
 from src.embedding import get_embeddings
 from src.agent import run_agent
-from src.knowledge_base import QdrantKnowledgeBase
 from src.ocr_loader import load_image_text, load_pdf_with_ocr
+from src.session_store import SessionVectorStore
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -458,27 +457,10 @@ def migrate_legacy_history():
     return {chat_id: {"title": generate_title(first_user_message), "messages": messages}}
 
 
-def build_knowledge_base():
-    embeddings = get_embeddings(mode="tfidf")
-    configured_path = os.getenv("QDRANT_PATH", "knowledge_base").strip()
-    base_dir = Path(configured_path)
-    if not base_dir.is_absolute():
-        base_dir = APP_DIR / base_dir
-
-    return QdrantKnowledgeBase(
-        embeddings=embeddings,
-        embedding_mode="tfidf",
-        base_dir=base_dir,
-        url=os.getenv("QDRANT_URL") or None,
-        api_key=os.getenv("QDRANT_API_KEY") or None,
-    )
-
-
-@st.cache_resource
-def get_knowledge_base():
-    kb = build_knowledge_base()
-    atexit.register(kb.close)
-    return kb
+def get_document_store():
+    if "store" not in st.session_state:
+        st.session_state.store = SessionVectorStore(get_embeddings(mode="tfidf"))
+    return st.session_state.store
 
 
 if "all_chats" not in st.session_state:
@@ -550,8 +532,8 @@ with st.sidebar:
     st.markdown('<div class="side-divider"></div>', unsafe_allow_html=True)
     st.markdown('<div class="side-title">Knowledge Base</div>', unsafe_allow_html=True)
 
-    kb = get_knowledge_base()
-    sources = kb.list_sources()
+    store = get_document_store()
+    sources = store.list_sources()
     if sources:
         for source in sources:
             col1, col2 = st.columns([5, 1])
@@ -564,10 +546,11 @@ with st.sidebar:
                 key=f"del_{source['source_id']}",
                 help=f"Delete {source['source_name']}",
             ):
-                kb.delete_source(source["source_id"])
+                store.delete_source(source["source_id"])
                 st.rerun()
     else:
         st.caption("No documents yet.")
+    st.caption("Uploads are temporary — they clear when the app restarts.")
 
     st.markdown('<div class="side-divider"></div>', unsafe_allow_html=True)
     with st.expander("Upload Documents", expanded=True):
@@ -587,16 +570,17 @@ if uploaded_files:
             processed = process_files(uploaded_files)
 
             if processed:
-                kb = get_knowledge_base()
+                store = get_document_store()
                 total_chunks = 0
                 for source, docs in processed:
                     chunks = chunk_data(docs)
-                    result = kb.add_documents(chunks, source_name=source)
+                    result = store.add_documents(chunks, source_name=source)
                     total_chunks += result.get("chunk_count", 0)
 
                 st.session_state.file_signature = current_signature
                 st.session_state.indexed_sources = [source for source, _ in processed]
                 st.session_state.chunk_count = total_chunks
+                st.rerun()
             else:
                 st.session_state.file_signature = current_signature
                 st.session_state.indexed_sources = []
@@ -644,11 +628,11 @@ if query:
 
     with st.chat_message("assistant", avatar="assistant"):
         with st.spinner("Generating answer..."):
-            kb = get_knowledge_base()
-            has_kb = kb.source_count() > 0
+            store = get_document_store()
+            has_kb = store.source_count() > 0
 
             try:
-                agent_result = run_agent(query, kb if has_kb else None)
+                agent_result = run_agent(query, store if has_kb else None)
                 answer = agent_result.get(
                     "generation", "Sorry, I could not generate an answer."
                 )
