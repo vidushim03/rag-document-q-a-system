@@ -71,8 +71,8 @@ st.markdown(
     }
 
     .block-container {
-        max-width: 920px !important;
-        padding-top: 2rem !important;
+        max-width: 880px !important;
+        padding-top: 1.5rem !important;
         padding-bottom: 6rem !important;
     }
 
@@ -233,42 +233,49 @@ st.markdown(
 
     /* Chat messages */
     div[data-testid="stChatMessage"] {
-        background: var(--panel-bg) !important;
-        border: 1px solid var(--panel-border) !important;
-        border-radius: 18px 18px 18px 6px !important;
-        padding: 1rem 1.2rem !important;
-        margin-bottom: 1rem !important;
-        backdrop-filter: blur(12px) !important;
-    }
-
-    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) {
-        background: var(--user-bubble) !important;
-        border-color: var(--user-border) !important;
-        border-radius: 18px 18px 6px 18px !important;
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        padding: 0.3rem 0 !important;
+        margin-bottom: 0.2rem !important;
+        backdrop-filter: none !important;
     }
 
     div[data-testid="stChatMessageAvatarUser"] {
-        background: linear-gradient(135deg, #6366f1, #a855f7) !important;
-        box-shadow: 0 2px 8px var(--accent-glow) !important;
+        display: none !important;
     }
 
     div[data-testid="stChatMessageAvatarAssistant"] {
         background: linear-gradient(135deg, #0ea5e9, #6366f1) !important;
-        box-shadow: 0 2px 8px rgba(14, 165, 233, 0.4) !important;
+        box-shadow: 0 2px 8px rgba(14, 165, 233, 0.35) !important;
+    }
+
+    div[data-testid="stChatMessageAvatarUser"] + [data-testid="stChatMessageContent"] {
+        background: var(--user-bubble) !important;
+        border: 1px solid var(--user-border) !important;
+        border-radius: 18px 18px 6px 18px !important;
+        padding: 0.5rem 0.9rem !important;
+        max-width: 78% !important;
+        margin-left: auto !important;
+        flex: 0 1 auto !important;
+    }
+
+    [data-testid="stChatMessageContent"] {
+        padding-top: 0.2rem !important;
     }
 
     [data-testid="stChatMessageContent"] p,
     [data-testid="stChatMessageContent"] li {
         color: var(--text-main);
-        font-size: 1.02rem;
-        line-height: 1.75;
+        font-size: 0.97rem;
+        line-height: 1.7;
     }
 
     [data-testid="stChatMessageContent"] pre {
         background: rgba(10, 15, 28, 0.7) !important;
         border: 1px solid var(--panel-border) !important;
-        border-radius: 12px !important;
-        padding: 0.8rem 1rem !important;
+        border-radius: 10px !important;
+        padding: 0.7rem 0.9rem !important;
     }
 
     /* File uploader */
