@@ -5,12 +5,13 @@ import uuid
 from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as components
 from langchain_core.documents import Document
 
 from src.chunker import chunk_data
 from src.data_loader import load_pdf
 from src.embedding import get_embeddings
-from src.agent import run_agent
+from src.agent import stream_agent
 from src.ocr_loader import load_image_text, load_pdf_with_ocr
 from src.session_store import SessionVectorStore
 
@@ -199,6 +200,33 @@ st.markdown(
         overflow: hidden;
         text-overflow: ellipsis;
         font-family: 'Inter', sans-serif;
+    }
+
+    /* Citations */
+    .cite-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-top: 0.6rem;
+    }
+
+    .cite-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        background: rgba(148, 163, 184, 0.07);
+        border: 1px solid var(--panel-border);
+        border-radius: 999px;
+        padding: 0.3rem 0.75rem;
+        font-family: 'Inter', sans-serif;
+    }
+
+    .upload-note {
+        font-size: 0.8rem;
+        color: #4ade80;
+        margin-top: 0.5rem;
     }
 
     /* Chat messages */
@@ -463,6 +491,34 @@ def get_document_store():
     return st.session_state.store
 
 
+def render_copy_button(text):
+    payload = json.dumps(text).replace("</", "<\\/")
+    html = f"""
+    <div style="display:flex;justify-content:flex-end;margin-top:6px;">
+        <button onclick="copyAnswer()" style="background:rgba(148,163,184,0.08);color:#e6edf7;border:1px solid rgba(148,163,184,0.3);border-radius:10px;padding:6px 16px;font-size:0.85rem;font-family:Inter,sans-serif;cursor:pointer;">Copy</button>
+    </div>
+    <script>
+    function copyAnswer() {{
+        var text = {payload};
+        if (navigator.clipboard && navigator.clipboard.writeText) {{
+            navigator.clipboard.writeText(text).catch(function() {{ fallbackCopy(text); }});
+        }} else {{
+            fallbackCopy(text);
+        }}
+    }}
+    function fallbackCopy(text) {{
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+    }}
+    </script>
+    """
+    components.html(html, height=48)
+
+
 if "all_chats" not in st.session_state:
     st.session_state.all_chats = load_chats()
 
@@ -530,29 +586,6 @@ with st.sidebar:
         st.rerun()
 
     st.markdown('<div class="side-divider"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="side-title">Knowledge Base</div>', unsafe_allow_html=True)
-
-    store = get_document_store()
-    sources = store.list_sources()
-    if sources:
-        for source in sources:
-            col1, col2 = st.columns([5, 1])
-            col1.markdown(
-                f'<div class="doc-chip">📄 {source["source_name"]}</div>',
-                unsafe_allow_html=True,
-            )
-            if col2.button(
-                "🗑",
-                key=f"del_{source['source_id']}",
-                help=f"Delete {source['source_name']}",
-            ):
-                store.delete_source(source["source_id"])
-                st.rerun()
-    else:
-        st.caption("No documents yet.")
-    st.caption("Uploads are temporary — they clear when the app restarts.")
-
-    st.markdown('<div class="side-divider"></div>', unsafe_allow_html=True)
     with st.expander("Upload Documents", expanded=True):
         uploaded_files = st.file_uploader(
             "Upload Documents",
@@ -561,6 +594,12 @@ with st.sidebar:
             label_visibility="collapsed",
         )
         st.caption("PDF · PNG · JPG · JPEG")
+
+    if st.session_state.get("upload_note"):
+        st.markdown(
+            f'<div class="upload-note">✓ {st.session_state.upload_note}</div>',
+            unsafe_allow_html=True,
+        )
 
 
 if uploaded_files:
@@ -580,15 +619,20 @@ if uploaded_files:
                 st.session_state.file_signature = current_signature
                 st.session_state.indexed_sources = [source for source, _ in processed]
                 st.session_state.chunk_count = total_chunks
+                st.session_state.upload_note = (
+                    f"Indexed {len(processed)} file(s) · {total_chunks} chunks"
+                )
                 st.rerun()
             else:
                 st.session_state.file_signature = current_signature
                 st.session_state.indexed_sources = []
                 st.session_state.chunk_count = 0
+                st.session_state.upload_note = None
 else:
     st.session_state.file_signature = None
     st.session_state.indexed_sources = []
     st.session_state.chunk_count = 0
+    st.session_state.upload_note = None
 
 if st.session_state.current_chat is None:
     chat = {"title": "New Chat", "messages": st.session_state.draft_messages}
@@ -621,37 +665,49 @@ if pending_query and not query:
     query = pending_query
 
 if query:
+    history = build_chat_history(messages)
     messages.append({"role": "user", "content": query})
 
     with st.chat_message("user", avatar="user"):
         st.markdown(query)
 
     with st.chat_message("assistant", avatar="assistant"):
-        with st.spinner("Generating answer..."):
-            store = get_document_store()
-            has_kb = store.source_count() > 0
+        store = get_document_store()
+        has_kb = store.source_count() > 0
+        source_docs = []
 
-            try:
-                agent_result = run_agent(query, store if has_kb else None)
-                answer = agent_result.get(
-                    "generation", "Sorry, I could not generate an answer."
-                )
-            except Exception as exc:
-                answer = (
-                    "Sorry, I could not generate an answer. "
-                    f"Check that GROQ_API_KEY in your .env file is valid. ({exc})"
-                )
-                agent_result = {"documents": [], "generation": answer}
+        def answer_generator():
+            for item in stream_agent(query, store if has_kb else None, history=history):
+                if item[0] == "token":
+                    yield item[1]
+                else:
+                    source_docs.extend(item[1])
 
-            st.markdown(answer)
+        try:
+            answer = st.write_stream(answer_generator())
+        except Exception as exc:
+            st.error(f"Could not generate an answer. Check GROQ_API_KEY. ({exc})")
+            answer = "Sorry, I could not generate an answer."
 
-            st.download_button(
-                "Copy",
-                data=answer,
-                file_name="answer.txt",
-                mime="text/plain",
-                key=f"copy_{len(messages)}",
+        local_sources = []
+        web_used = False
+        for doc in source_docs:
+            src = (doc.metadata or {}).get("source")
+            if src == "web_search":
+                web_used = True
+            elif src:
+                local_sources.append(src)
+
+        if local_sources:
+            chips = "".join(
+                f'<span class="cite-chip">📄 {s}</span>'
+                for s in dict.fromkeys(local_sources)
             )
+            st.markdown(f'<div class="cite-row">{chips}</div>', unsafe_allow_html=True)
+        elif web_used:
+            st.caption("Answer included web search results.")
+
+        render_copy_button(answer)
 
     messages.append({"role": "assistant", "content": answer})
     if st.session_state.current_chat is None:

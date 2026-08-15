@@ -9,4 +9,15 @@ if (-not (Test-Path $pythonExe)) {
 }
 
 Set-Location $projectRoot
+
+$gitDirs = @(
+    "C:\Program Files\Git\cmd",
+    "C:\Program Files\Git\bin"
+)
+foreach ($dir in $gitDirs) {
+    if ((Test-Path $dir) -and ($env:Path -notmatch [regex]::Escape($dir))) {
+        $env:Path = "$dir;$env:Path"
+    }
+}
+
 & $pythonExe -m streamlit run app.py
