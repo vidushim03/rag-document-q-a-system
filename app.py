@@ -19,6 +19,8 @@ from src.session_store import SessionVectorStore
 APP_DIR = Path(__file__).resolve().parent
 CHAT_FILE = APP_DIR / "chats.json"
 LEGACY_CHAT_FILE = APP_DIR / "chat_history.json"
+CHATS_STORAGE_KEY = "rag_chats_v1"
+CHATS_BRIDGE_PARAM = "st_chats_bridge"
 
 st.set_page_config(
     page_title="RAG Assistant",
@@ -401,6 +403,16 @@ def build_chat_history(messages):
 
 
 def load_chats():
+    bridge = st.query_params.get(CHATS_BRIDGE_PARAM)
+    if bridge:
+        st.query_params.clear()
+        try:
+            chats = json.loads(bridge)
+            if isinstance(chats, dict):
+                return chats
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     try:
         with CHAT_FILE.open("r", encoding="utf-8") as file:
             chats = json.load(file)
@@ -447,6 +459,32 @@ def generate_title(query):
     if not cleaned:
         return "New Chat"
     return cleaned[:40] + "..." if len(cleaned) > 40 else cleaned
+
+
+def smart_title(query):
+    try:
+        from langchain_core.output_parsers import StrOutputParser
+        from langchain_core.prompts import ChatPromptTemplate
+        from langchain_groq import ChatGroq
+
+        llm = ChatGroq(temperature=0, model_name="llama-3.1-8b-instant")
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", "Create a short chat title of at most 5 words capturing the topic of the user's first question. Output only the title, no quotes and no punctuation."),
+            ("human", "{query}"),
+        ])
+        title = (
+            (prompt | llm | StrOutputParser())
+            .invoke({"query": query})
+            .strip()
+            .strip('"')
+            .strip("'")
+            .strip()
+        )
+        if title and len(title) <= 50:
+            return title
+    except Exception:
+        pass
+    return generate_title(query)
 
 
 def format_chat_title(chat_id):
@@ -517,6 +555,40 @@ def render_copy_button(text):
     </script>
     """
     components.html(html, height=48)
+
+
+def render_chat_persistence_bridge():
+    """If the browser has saved chats, hand them to the app once via a URL redirect."""
+    payload = json.dumps(st.session_state.all_chats).replace("</", "<\\/")
+    html = f"""
+    <script>
+    (function () {{
+        try {{
+            var raw = localStorage.getItem({json.dumps(CHATS_STORAGE_KEY)});
+            if (!raw || raw.length > 80000) return;
+            var url = new URL(window.location.href);
+            if (url.searchParams.has({json.dumps(CHATS_BRIDGE_PARAM)})) return;
+            if (raw === JSON.stringify({payload})) return;
+            url.searchParams.set({json.dumps(CHATS_BRIDGE_PARAM)}, raw);
+            window.location.replace(url.toString());
+        }} catch (e) {{}}
+    }})();
+    </script>
+    """
+    components.html(html, height=0)
+
+
+def persist_chats_localstorage():
+    """Write the current chats into the browser's localStorage."""
+    payload = json.dumps(st.session_state.all_chats).replace("</", "<\\/")
+    html = f"""
+    <script>
+    try {{
+        localStorage.setItem({json.dumps(CHATS_STORAGE_KEY)}, {payload});
+    }} catch (e) {{}}
+    </script>
+    """
+    components.html(html, height=0)
 
 
 if "all_chats" not in st.session_state:
@@ -711,10 +783,14 @@ if query:
 
     messages.append({"role": "assistant", "content": answer})
     if st.session_state.current_chat is None:
-        create_chat(title=generate_title(query), messages=messages)
+        create_chat(title=smart_title(query), messages=messages)
         st.session_state.draft_messages = []
+        st.rerun()
     else:
         if chat["title"] == "New Chat":
-            chat["title"] = generate_title(query)
+            chat["title"] = smart_title(query)
         st.session_state.all_chats[st.session_state.current_chat] = chat
         save_chats()
+
+render_chat_persistence_bridge()
+persist_chats_localstorage()
