@@ -22,7 +22,6 @@ class GraphState(TypedDict):
     loop_count: int
     db: Any
     history: str
-    grade_decision: str
 
 
 def get_llm():
@@ -144,36 +143,6 @@ def grade_documents(state: GraphState):
     }
 
 
-def transform_query(state: GraphState):
-    """Transform the query to produce a better question."""
-    print("---TRANSFORM QUERY---")
-    question = state["question"]
-    documents = state["documents"]
-    loop_count = state.get("loop_count", 0)
-    history = state.get("history", "") or ""
-
-    system = (
-        "You are a question re-writer that converts an input question to a better version that is optimized for vectorstore retrieval. "
-        "Look at the input and try to reason about the underlying semantic intent / meaning."
-    )
-    if history:
-        system += "\nUse the conversation for context when needed.\nConversation so far:\n" + history
-
-    llm = get_llm()
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system),
-        ("human", "Here is the initial question: \n\n {question} \n Formulate an improved question."),
-    ])
-    chain = prompt | llm | StrOutputParser()
-    better_question = chain.invoke({"question": question})
-    print(f"Original: {question}\nRewritten: {better_question}")
-    return {
-        "documents": documents,
-        "question": better_question,
-        "loop_count": loop_count + 1,
-    }
-
-
 def web_search(state: GraphState):
     """Web search based on the re-phrased question."""
     print("---WEB SEARCH---")
@@ -226,77 +195,15 @@ def route_question(state: GraphState):
 
 
 def decide_to_generate(state: GraphState):
-    """Determines whether to generate an answer, re-generate a question, or fall back to web search."""
+    """Determines whether to generate an answer from the documents or fall back to web search."""
     print("---ASSESS GRADED DOCUMENTS---")
     web_search = state.get("web_search", False)
-    loop_count = state.get("loop_count", 0)
 
     if web_search:
-        if loop_count >= 1:
-            print("---NO RELEVANT DOCUMENTS, FALLING BACK TO WEB SEARCH---")
-            return "web_search"
-        print("---DECISION: ALL DOCUMENTS NOT RELEVANT, TRANSFORM QUERY---")
-        return "transform_query"
-    else:
-        print("---DECISION: GENERATE---")
-        return "generate"
-
-
-def grade_answer(state: GraphState):
-    """Checks whether the generation is grounded in the documents and answers the question."""
-    print("---CHECK HALLUCINATIONS---")
-    question = state["question"]
-    documents = state["documents"]
-    generation = state["generation"]
-    loop_count = state.get("loop_count", 0)
-
-    if loop_count >= 2:
-        print("---MAX LOOPS REACHED, ENDING---")
-        return {"grade_decision": "useful", "loop_count": loop_count}
-
-    llm = get_json_llm()
-    # Hallucination Grader
-    prompt_hallucination = ChatPromptTemplate.from_messages([
-        ("system", "You are a grader assessing whether an LLM generation is grounded in / supported by a set of retrieved facts. \n"
-                   "Give a binary score 'yes' or 'no'. 'Yes' means that the answer is grounded in / supported by the set of facts. \n"
-                   "Return JSON with a single key 'score' and value 'yes' or 'no'."),
-        ("human", "Set of facts: \n\n {documents} \n\n LLM generation: {generation}"),
-    ])
-    chain_hallucination = prompt_hallucination | llm | JsonOutputParser()
-
-    # Answer Grader
-    prompt_answer = ChatPromptTemplate.from_messages([
-        ("system", "You are a grader assessing whether an answer addresses / resolves a question \n"
-                   "Give a binary score 'yes' or 'no'. Yes' means that the answer resolves the question. \n"
-                   "Return JSON with a single key 'score' and value 'yes' or 'no'."),
-        ("human", "User question: \n\n {question} \n\n LLM generation: {generation}"),
-    ])
-    chain_answer = prompt_answer | llm | JsonOutputParser()
-
-    context = "\n\n".join([doc.page_content for doc in documents])
-
-    try:
-        score = chain_hallucination.invoke({"documents": context, "generation": generation})
-        grade = score.get("score", "no")
-        if grade.lower() == "yes":
-            print("---DECISION: GENERATION IS GROUNDED IN DOCUMENTS---")
-            score_answer = chain_answer.invoke({"question": question, "generation": generation})
-            grade_answer_val = score_answer.get("score", "no")
-            if grade_answer_val.lower() == "yes":
-                print("---DECISION: GENERATION ADDRESSES QUESTION---")
-                return {"grade_decision": "useful", "loop_count": loop_count}
-            else:
-                print("---DECISION: GENERATION DOES NOT ADDRESS QUESTION---")
-                return {"grade_decision": "not useful", "loop_count": loop_count}
-        else:
-            print("---DECISION: GENERATION IS NOT GROUNDED IN DOCUMENTS, RE-TRY---")
-            return {"grade_decision": "not supported", "loop_count": loop_count}
-    except Exception:
-        return {"grade_decision": "useful", "loop_count": loop_count}
-
-
-def after_grade(state: GraphState):
-    return state.get("grade_decision", "useful")
+        print("---NO RELEVANT DOCUMENTS, FALLING BACK TO WEB SEARCH---")
+        return "web_search"
+    print("---DECISION: GENERATE---")
+    return "generate"
 
 
 def create_agent_graph():
@@ -307,8 +214,6 @@ def create_agent_graph():
     workflow.add_node("retrieve", retrieve)
     workflow.add_node("grade_documents", grade_documents)
     workflow.add_node("generate", generate)
-    workflow.add_node("transform_query", transform_query)
-    workflow.add_node("grade_answer", grade_answer)
 
     # Build graph
     workflow.set_conditional_entry_point(
@@ -324,22 +229,11 @@ def create_agent_graph():
         "grade_documents",
         decide_to_generate,
         {
-            "transform_query": "transform_query",
             "generate": "generate",
             "web_search": "web_search",
         }
     )
-    workflow.add_edge("transform_query", "retrieve")
-    workflow.add_edge("generate", "grade_answer")
-    workflow.add_conditional_edges(
-        "grade_answer",
-        after_grade,
-        {
-            "not supported": "generate",
-            "useful": END,
-            "not useful": "transform_query",
-        }
-    )
+    workflow.add_edge("generate", END)
 
     return workflow.compile()
 
