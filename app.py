@@ -571,7 +571,7 @@ def render_chat_persistence_bridge():
             if (!raw || raw.length > 80000) return;
             var url = new URL(window.location.href);
             if (url.searchParams.has({json.dumps(CHATS_BRIDGE_PARAM)})) return;
-            if (raw === JSON.stringify({payload})) return;
+            if (raw === {payload}) return;
             url.searchParams.set({json.dumps(CHATS_BRIDGE_PARAM)}, raw);
             window.location.replace(url.toString());
         }} catch (e) {{}}
