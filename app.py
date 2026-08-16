@@ -465,32 +465,25 @@ def generate_title(query):
     cleaned = " ".join(query.strip().split())
     if not cleaned:
         return "New Chat"
-    return cleaned[:40] + "..." if len(cleaned) > 40 else cleaned
+    low = cleaned.lower()
+    for lead in (
+        "what is ", "what are ", "what's ", "whats ", "how to ", "how do i ",
+        "how can i ", "why does ", "why do ", "can you ", "could you ",
+        "please ", "tell me ", "summarize ", "summarise ", "explain ",
+        "describe ", "give me ", "i need ", "help me ",
+    ):
+        if low.startswith(lead):
+            cleaned = cleaned[len(lead):].strip()
+            break
+    short = " ".join(cleaned.split()[:6]).strip()
+    if not short:
+        short = cleaned
+    if len(short) > 42:
+        short = short[:39].rstrip() + "..."
+    return short[0].upper() + short[1:]
 
 
 def smart_title(query):
-    try:
-        from langchain_core.output_parsers import StrOutputParser
-        from langchain_core.prompts import ChatPromptTemplate
-        from langchain_groq import ChatGroq
-
-        llm = ChatGroq(temperature=0, model_name="llama-3.1-8b-instant")
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", "Create a short chat title of at most 5 words capturing the topic of the user's first question. Output only the title, no quotes and no punctuation."),
-            ("human", "{query}"),
-        ])
-        title = (
-            (prompt | llm | StrOutputParser())
-            .invoke({"query": query})
-            .strip()
-            .strip('"')
-            .strip("'")
-            .strip()
-        )
-        if title and len(title) <= 50:
-            return title
-    except Exception:
-        pass
     return generate_title(query)
 
 
@@ -616,8 +609,8 @@ if "chat_stores" not in st.session_state:
 if "draft_store" not in st.session_state:
     st.session_state.draft_store = None
 
-if "upload_sig" not in st.session_state:
-    st.session_state.upload_sig = None
+if "chat_upload_sigs" not in st.session_state:
+    st.session_state.chat_upload_sigs = {}
 
 ensure_current_chat()
 
@@ -653,6 +646,7 @@ with st.sidebar:
                 if st.button(label, key=f"chat_{chat_id}", use_container_width=True):
                     st.session_state.current_chat = chat_id
                     st.session_state.draft_messages = []
+                    st.session_state.draft_store = None
                     st.rerun()
             with row[1]:
                 if st.button("✕", key=f"del_{chat_id}", help="Delete chat", use_container_width=True):
@@ -674,7 +668,7 @@ with st.sidebar:
             type=["pdf", "png", "jpg", "jpeg"],
             accept_multiple_files=True,
             label_visibility="collapsed",
-            key="doc_uploader",
+            key=f"doc_uploader_{st.session_state.current_chat}",
         )
         st.caption("PDF · PNG · JPG · JPEG")
 
@@ -688,8 +682,9 @@ with st.sidebar:
 
 
 if uploaded_files:
+    sig_key = st.session_state.current_chat or "draft"
     current_signature = tuple((file.name, file.size) for file in uploaded_files)
-    if st.session_state.upload_sig != current_signature:
+    if st.session_state.chat_upload_sigs.get(sig_key) != current_signature:
         with st.spinner("Processing documents..."):
             processed = process_files(uploaded_files)
 
@@ -708,11 +703,8 @@ if uploaded_files:
                     result = store.add_documents(chunks, source_name=source)
                     total_chunks += result.get("chunk_count", 0)
 
-                st.session_state.upload_sig = current_signature
-                st.rerun()
-            else:
-                st.session_state.upload_sig = current_signature
-                st.rerun()
+            st.session_state.chat_upload_sigs[sig_key] = current_signature
+            st.rerun()
 if st.session_state.current_chat is None:
     chat = {"title": "New Chat", "messages": st.session_state.draft_messages}
 else:
