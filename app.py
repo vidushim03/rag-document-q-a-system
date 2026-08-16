@@ -531,9 +531,12 @@ def migrate_legacy_history():
 
 
 def get_document_store():
-    if "store" not in st.session_state:
-        st.session_state.store = SessionVectorStore(get_embeddings(mode="tfidf"))
-    return st.session_state.store
+    chat_id = st.session_state.current_chat
+    if chat_id and chat_id in st.session_state.chat_stores:
+        return st.session_state.chat_stores[chat_id]
+    if chat_id is None and st.session_state.draft_store is not None:
+        return st.session_state.draft_store
+    return None
 
 
 def render_copy_button(text):
@@ -607,14 +610,14 @@ if "current_chat" not in st.session_state:
 if "draft_messages" not in st.session_state:
     st.session_state.draft_messages = []
 
-if "file_signature" not in st.session_state:
-    st.session_state.file_signature = None
+if "chat_stores" not in st.session_state:
+    st.session_state.chat_stores = {}
 
-if "indexed_sources" not in st.session_state:
-    st.session_state.indexed_sources = []
+if "draft_store" not in st.session_state:
+    st.session_state.draft_store = None
 
-if "chunk_count" not in st.session_state:
-    st.session_state.chunk_count = 0
+if "upload_sig" not in st.session_state:
+    st.session_state.upload_sig = None
 
 ensure_current_chat()
 
@@ -635,6 +638,7 @@ with st.sidebar:
     if st.button("New chat", type="primary", use_container_width=True):
         st.session_state.current_chat = None
         st.session_state.draft_messages = []
+        st.session_state.draft_store = None
         st.rerun()
 
     st.markdown('<div class="side-title">Chats</div>', unsafe_allow_html=True)
@@ -642,27 +646,26 @@ with st.sidebar:
     if chat_ids:
         for chat_id in chat_ids:
             is_active = st.session_state.current_chat == chat_id
-            marker = "● " if is_active else "    "
-            label = f"{marker}{format_chat_title(chat_id)}"
-            if st.button(label, key=f"chat_{chat_id}", use_container_width=True):
-                st.session_state.current_chat = chat_id
-                st.session_state.draft_messages = []
-                st.rerun()
+            row = st.columns([0.86, 0.14])
+            with row[0]:
+                marker = "● " if is_active else "   "
+                label = f"{marker}{format_chat_title(chat_id)}"
+                if st.button(label, key=f"chat_{chat_id}", use_container_width=True):
+                    st.session_state.current_chat = chat_id
+                    st.session_state.draft_messages = []
+                    st.rerun()
+            with row[1]:
+                if st.button("✕", key=f"del_{chat_id}", help="Delete chat", use_container_width=True):
+                    st.session_state.all_chats.pop(chat_id, None)
+                    st.session_state.chat_stores.pop(chat_id, None)
+                    save_chats()
+                    if st.session_state.current_chat == chat_id:
+                        st.session_state.current_chat = None
+                        st.session_state.draft_messages = []
+                        st.session_state.draft_store = None
+                    st.rerun()
     else:
         st.caption("No conversations yet.")
-
-    if st.button(
-        "Delete current chat",
-        use_container_width=True,
-        disabled=st.session_state.current_chat is None,
-    ):
-        chat_id = st.session_state.current_chat
-        if chat_id and chat_id in st.session_state.all_chats:
-            del st.session_state.all_chats[chat_id]
-            save_chats()
-        st.session_state.current_chat = None
-        st.session_state.draft_messages = []
-        st.rerun()
 
     st.markdown('<div class="side-divider"></div>', unsafe_allow_html=True)
     with st.expander("Upload Documents", expanded=True):
@@ -671,48 +674,45 @@ with st.sidebar:
             type=["pdf", "png", "jpg", "jpeg"],
             accept_multiple_files=True,
             label_visibility="collapsed",
+            key="doc_uploader",
         )
         st.caption("PDF · PNG · JPG · JPEG")
 
-    if st.session_state.get("upload_note"):
+    store = get_document_store()
+    if store and store.source_count() > 0:
+        total_chunks = sum(s["chunk_count"] for s in store.list_sources())
         st.markdown(
-            f'<div class="upload-note">✓ {st.session_state.upload_note}</div>',
+            f'<div class="upload-note">✓ {store.source_count()} source(s) · {total_chunks} chunks in this chat</div>',
             unsafe_allow_html=True,
         )
 
 
 if uploaded_files:
     current_signature = tuple((file.name, file.size) for file in uploaded_files)
-    if st.session_state.file_signature != current_signature:
+    if st.session_state.upload_sig != current_signature:
         with st.spinner("Processing documents..."):
             processed = process_files(uploaded_files)
 
             if processed:
                 store = get_document_store()
+                if store is None:
+                    store = SessionVectorStore(get_embeddings(mode="tfidf"))
+                    if st.session_state.current_chat:
+                        st.session_state.chat_stores[st.session_state.current_chat] = store
+                    else:
+                        st.session_state.draft_store = store
+
                 total_chunks = 0
                 for source, docs in processed:
                     chunks = chunk_data(docs)
                     result = store.add_documents(chunks, source_name=source)
                     total_chunks += result.get("chunk_count", 0)
 
-                st.session_state.file_signature = current_signature
-                st.session_state.indexed_sources = [source for source, _ in processed]
-                st.session_state.chunk_count = total_chunks
-                st.session_state.upload_note = (
-                    f"Indexed {len(processed)} file(s) · {total_chunks} chunks"
-                )
+                st.session_state.upload_sig = current_signature
                 st.rerun()
             else:
-                st.session_state.file_signature = current_signature
-                st.session_state.indexed_sources = []
-                st.session_state.chunk_count = 0
-                st.session_state.upload_note = None
-else:
-    st.session_state.file_signature = None
-    st.session_state.indexed_sources = []
-    st.session_state.chunk_count = 0
-    st.session_state.upload_note = None
-
+                st.session_state.upload_sig = current_signature
+                st.rerun()
 if st.session_state.current_chat is None:
     chat = {"title": "New Chat", "messages": st.session_state.draft_messages}
 else:
@@ -752,7 +752,7 @@ if query:
 
     with st.chat_message("assistant", avatar="assistant"):
         store = get_document_store()
-        has_kb = store.source_count() > 0
+        has_kb = store is not None and store.source_count() > 0
         source_docs = []
 
         def answer_generator():
@@ -791,6 +791,9 @@ if query:
     messages.append({"role": "assistant", "content": answer})
     if st.session_state.current_chat is None:
         create_chat(title=smart_title(query), messages=messages)
+        if st.session_state.draft_store is not None:
+            st.session_state.chat_stores[st.session_state.current_chat] = st.session_state.draft_store
+            st.session_state.draft_store = None
         st.session_state.draft_messages = []
         st.rerun()
     else:
