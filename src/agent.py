@@ -132,8 +132,9 @@ def grade_documents(state: GraphState):
             print("---GRADE: DOCUMENT NOT RELEVANT---")
 
     if not filtered_docs:
-        print("---GRADE: NO RELEVANT DOCUMENTS, QUEUE WEB SEARCH---")
-        web_search = True
+        print("---GRADE: NO DOC MARKED RELEVANT, KEEPING RETRIEVED DOCS---")
+        filtered_docs = list(documents)
+        web_search = False
 
     return {
         "documents": filtered_docs,
@@ -164,33 +165,16 @@ def web_search(state: GraphState):
 
 # Routing logic
 def route_question(state: GraphState):
-    """Route question to web search or RAG."""
-    print("---ROUTE QUESTION---")
-    question = state["question"]
-    db = state.get("db")
+    """Route question to web search or RAG.
 
-    if not db:
+    When the user has uploaded documents we always consult the vectorstore,
+    so their files are never ignored.
+    """
+    print("---ROUTE QUESTION---")
+    if not state.get("db"):
         print("---NO KNOWLEDGE BASE, ROUTING TO WEB SEARCH---")
         return "web_search"
-
-    llm = get_json_llm()
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are an expert at routing a user question to a vectorstore or web search. \n"
-                   "The vectorstore contains documents the user uploaded and should be used for questions about their contents. \n"
-                   "Only use web-search when the question is clearly about general knowledge, current events, or explicitly asks to search the web.\n"
-                   "When in doubt, choose the vectorstore.\n"
-                   "Return JSON with a single key 'datasource' and value 'web_search' or 'vectorstore'."),
-        ("human", "{question}"),
-    ])
-    chain = prompt | llm | JsonOutputParser()
-    try:
-        source = chain.invoke({"question": question})
-        if source.get("datasource") == "web_search":
-            print("---ROUTE QUESTION TO WEB SEARCH---")
-            return "web_search"
-    except Exception:
-        pass
-    print("---ROUTE QUESTION TO RAG---")
+    print("---ROUTE QUESTION TO RAG (documents uploaded)---")
     return "vectorstore"
 
 
