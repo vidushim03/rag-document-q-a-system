@@ -24,13 +24,17 @@ class GraphState(TypedDict):
     history: str
 
 
+import os
+
 def get_llm():
-    return ChatGroq(temperature=0, model_name="llama-3.1-8b-instant")
+    model_name = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    return ChatGroq(temperature=0, model_name=model_name)
 
 
 def get_json_llm():
     # Helper to get an LLM that is forced to output JSON if needed
-    return ChatGroq(temperature=0, model_name="llama-3.1-8b-instant")
+    model_name = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    return ChatGroq(temperature=0, model_name=model_name)
 
 
 def format_history(history):
