@@ -60,8 +60,8 @@ def pdf_page_to_base64(page):
     return base64.b64encode(pixmap.tobytes("png")).decode("utf-8")
 
 
-def extract_text_with_groq_vision(base64_image):
-    """Extract text from an image using Groq vision."""
+def extract_text_with_groq_vision(base64_image, mime_type="image/png"):
+    """Extract text from a base64 image using Groq vision."""
     try:
         response = _get_client().chat.completions.create(
             model=GROQ_OCR_MODEL,
@@ -72,7 +72,7 @@ def extract_text_with_groq_vision(base64_image):
                         {
                             "type": "image_url",
                             "image_url": {
-                                "url": f"data:image/png;base64,{base64_image}"
+                                "url": f"data:{mime_type};base64,{base64_image}"
                             },
                         },
                         {
@@ -205,29 +205,7 @@ def load_image_text(path):
         base64_image = base64.b64encode(image_bytes).decode("utf-8")
         extension = Path(path).suffix.lower().lstrip(".")
         mime_type = "image/png" if extension == "png" else "image/jpeg"
-
-        response = _get_client().chat.completions.create(
-            model=GROQ_OCR_MODEL,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:{mime_type};base64,{base64_image}"
-                            },
-                        },
-                        {
-                            "type": "text",
-                            "text": "Extract all the text exactly as it appears. Only return text.",
-                        },
-                    ],
-                }
-            ],
-            max_tokens=1500,
-        )
-        return _clean_response(response.choices[0].message.content.strip())
+        return extract_text_with_groq_vision(base64_image, mime_type=mime_type)
     except Exception as exc:
         print(f"Groq OCR image error: {exc}")
         return ""

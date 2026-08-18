@@ -492,10 +492,6 @@ def generate_title(query):
     return short[0].upper() + short[1:]
 
 
-def smart_title(query):
-    return generate_title(query)
-
-
 def format_chat_title(chat_id):
     title = st.session_state.all_chats[chat_id]["title"]
     return title[:34] + "..." if len(title) > 34 else title
@@ -821,7 +817,7 @@ if query:
 
     messages.append({"role": "assistant", "content": answer})
     if st.session_state.current_chat is None:
-        create_chat(title=smart_title(query), messages=messages)
+        create_chat(title=generate_title(query), messages=messages)
         if st.session_state.draft_store is not None:
             st.session_state.chat_stores[st.session_state.current_chat] = st.session_state.draft_store
             st.session_state.draft_store = None
@@ -829,7 +825,7 @@ if query:
         st.rerun()
     else:
         if chat["title"] == "New Chat":
-            chat["title"] = smart_title(query)
+            chat["title"] = generate_title(query)
         st.session_state.all_chats[st.session_state.current_chat] = chat
         save_chats()
 

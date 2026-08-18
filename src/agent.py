@@ -1,3 +1,5 @@
+import os
+import re
 from typing import Any, Dict, List
 
 from langchain_community.tools.tavily_search import TavilySearchResults
@@ -24,13 +26,9 @@ class GraphState(TypedDict):
     history: str
 
 
-import os
-import re
-
-
 def _strip_think(text: str) -> str:
-    """Remove <think>...</think> blocks that some models emit."""
-    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip() or text.strip()
+    """Remove  thinking... response blocks that some models emit."""
+    return re.sub(r" thinking.*? response", "", text, flags=re.DOTALL).strip() or text.strip()
 
 
 def get_llm():
@@ -116,7 +114,7 @@ def grade_documents(state: GraphState):
     documents = state["documents"]
     loop_count = state.get("loop_count", 0)
 
-    llm = get_json_llm()
+    llm = get_llm()
     prompt = ChatPromptTemplate.from_messages([
         ("system", "You are a grader assessing the relevance of retrieved documents to a user question. \n"
                    "A document is relevant if it contains keyword(s) or semantic meaning related to the question. \n"
