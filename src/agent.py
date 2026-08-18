@@ -31,6 +31,63 @@ def _strip_think(text: str) -> str:
     return re.sub(r" thinking.*? response", "", text, flags=re.DOTALL).strip() or text.strip()
 
 
+class _ThinkingFilter:
+    """Statefully strips  thinking... response blocks from a token stream.
+
+    The regex approach only works on a complete string, so per-token
+    stripping lets the tags leak through. This filter buffers a few chars
+    to detect markers that may span token boundaries.
+    """
+
+    _OPEN = " thinking"
+    _CLOSE = " response"
+    _OPEN_LEN = len(_OPEN)
+    _CLOSE_LEN = len(_CLOSE)
+
+    def __init__(self):
+        self._pending = ""
+        self._in_think = False
+
+    def push(self, token: str):
+        """Consume one token and yield any visible text it completes."""
+        self._pending += token
+        emitted = ""
+
+        if self._in_think:
+            close = self._pending.find(self._CLOSE)
+            if close == -1:
+                self._pending = self._pending[-self._CLOSE_LEN:]
+                return ""
+            self._pending = self._pending[close + self._CLOSE_LEN:]
+            self._in_think = False
+
+        while True:
+            open_idx = self._pending.find(self._OPEN)
+            if open_idx == -1:
+                keep = self._OPEN_LEN - 1
+                if len(self._pending) > keep:
+                    emitted += self._pending[:-keep]
+                    self._pending = self._pending[-keep:]
+                return emitted
+
+            emitted += self._pending[:open_idx]
+            self._pending = self._pending[open_idx + self._OPEN_LEN:]
+            self._in_think = True
+
+            close = self._pending.find(self._CLOSE)
+            if close == -1:
+                self._pending = self._pending[-self._CLOSE_LEN:]
+                return emitted
+            self._pending = self._pending[close + self._CLOSE_LEN:]
+            self._in_think = False
+
+    def flush(self) -> str:
+        """Yield any remaining visible text at the end of the stream."""
+        if self._in_think:
+            self._pending = ""
+        return self._pending
+
+
 def get_llm():
     model_name = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
     return ChatGroq(temperature=0, model_name=model_name)
@@ -268,14 +325,20 @@ def stream_agent(question: str, db: Any, history=None):
     inputs = _build_inputs(question, db, history)
 
     final_docs: List[Document] = []
+    filter_ = _ThinkingFilter()
     for mode, data in app.stream(inputs, stream_mode=["messages", "updates"]):
         if mode == "messages":
             chunk, meta = data
             if meta.get("langgraph_node") == "generate" and chunk.content:
-                yield ("token", _strip_think(chunk.content))
+                cleaned = filter_.push(chunk.content)
+                if cleaned:
+                    yield ("token", cleaned)
         elif mode == "updates":
             generate_state = data.get("generate")
             if generate_state and generate_state.get("documents"):
                 final_docs = generate_state["documents"]
 
+    remaining = filter_.flush()
+    if remaining:
+        yield ("token", remaining)
     yield ("done", final_docs)
