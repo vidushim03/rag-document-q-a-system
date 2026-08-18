@@ -25,6 +25,13 @@ class GraphState(TypedDict):
 
 
 import os
+import re
+
+
+def _strip_think(text: str) -> str:
+    """Remove <think>...</think> blocks that some models emit."""
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip() or text.strip()
+
 
 def get_llm():
     model_name = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
@@ -32,7 +39,6 @@ def get_llm():
 
 
 def get_json_llm():
-    # Helper to get an LLM that is forced to output JSON if needed
     model_name = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
     return ChatGroq(temperature=0, model_name=model_name)
 
@@ -73,7 +79,12 @@ def generate(state: GraphState):
     history = state.get("history", "") or ""
 
     system_parts = [
-        "You are an assistant for question-answering tasks. Use the following pieces of retrieved context to answer the question. If you don't know the answer, just say that you don't know. Keep the answer concise."
+        "You are a helpful, friendly assistant. Use the following pieces of retrieved context to answer the user's question.\n"
+        "- Answer based ONLY on the provided context when it contains relevant information.\n"
+        "- Be conversational and approachable — avoid sounding robotic or stiff.\n"
+        "- If the context doesn't cover the question, say so naturally and offer to help with something else.\n"
+        "- You may use markdown formatting (bold, bullet points, code blocks) when it improves readability.\n"
+        "- Do NOT start your response with <think> tags."
     ]
     if history:
         system_parts.append("Conversation so far:\n" + history)
@@ -89,6 +100,7 @@ def generate(state: GraphState):
 
     context = "\n\n".join([doc.page_content for doc in documents])
     generation = rag_chain.invoke({"context": context, "question": question})
+    generation = _strip_think(generation)
     return {
         "documents": documents,
         "question": question,
@@ -262,7 +274,7 @@ def stream_agent(question: str, db: Any, history=None):
         if mode == "messages":
             chunk, meta = data
             if meta.get("langgraph_node") == "generate" and chunk.content:
-                yield ("token", chunk.content)
+                yield ("token", _strip_think(chunk.content))
         elif mode == "updates":
             generate_state = data.get("generate")
             if generate_state and generate_state.get("documents"):
