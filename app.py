@@ -540,14 +540,22 @@ def get_document_store():
 def render_copy_button(text):
     payload = json.dumps(text).replace("</", "<\\/")
     html = f"""
-    <div style="display:flex;justify-content:flex-end;margin-top:6px;">
-        <button onclick="copyAnswer()" style="background:rgba(148,163,184,0.08);color:#e6edf7;border:1px solid rgba(148,163,184,0.3);border-radius:10px;padding:6px 16px;font-size:0.85rem;font-family:Inter,sans-serif;cursor:pointer;">Copy</button>
+    <div style="display:flex;justify-content:flex-end;margin-top:10px;margin-bottom:4px;">
+        <button onclick="copyAnswer()" style="background:linear-gradient(135deg,var(--accent),#7c3aed);color:#fff;border:none;border-radius:10px;padding:8px 18px;font-size:0.85rem;font-weight:600;font-family:Inter,sans-serif;cursor:pointer;box-shadow:0 2px 8px var(--accent-glow);transition:transform 0.15s,box-shadow 0.15s;" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 14px var(--accent-glow)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px var(--accent-glow)'">Copy Answer</button>
     </div>
     <script>
     function copyAnswer() {{
         var text = {payload};
         if (navigator.clipboard && navigator.clipboard.writeText) {{
-            navigator.clipboard.writeText(text).catch(function() {{ fallbackCopy(text); }});
+            navigator.clipboard.writeText(text).then(function() {{
+                var btn = document.querySelector('button[onclick="copyAnswer()"]');
+                if (btn) {{
+                    var orig = btn.textContent;
+                    btn.textContent = 'Copied!';
+                    btn.style.background = 'linear-gradient(135deg, #22c55e, #16a34a)';
+                    setTimeout(function() {{ btn.textContent = orig; btn.style.background = 'linear-gradient(135deg, var(--accent), #7c3aed)'; }}, 1500);
+                }}
+            }}).catch(function() {{ fallbackCopy(text); }});
         }} else {{
             fallbackCopy(text);
         }}
@@ -555,14 +563,16 @@ def render_copy_button(text):
     function fallbackCopy(text) {{
         var ta = document.createElement('textarea');
         ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
         document.body.appendChild(ta);
         ta.select();
-        document.execCommand('copy');
+        try {{ document.execCommand('copy'); }} catch (e) {{}}
         document.body.removeChild(ta);
     }}
     </script>
     """
-    components.html(html, height=48)
+    components.html(html, height=60)
 
 
 def render_chat_persistence_bridge():
