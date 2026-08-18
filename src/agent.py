@@ -27,13 +27,13 @@ class GraphState(TypedDict):
 import os
 
 def get_llm():
-    model_name = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    model_name = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
     return ChatGroq(temperature=0, model_name=model_name)
 
 
 def get_json_llm():
     # Helper to get an LLM that is forced to output JSON if needed
-    model_name = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    model_name = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
     return ChatGroq(temperature=0, model_name=model_name)
 
 
