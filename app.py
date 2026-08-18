@@ -379,6 +379,15 @@ def process_files(files):
                 if not docs or is_scanned_pdf(docs):
                     st.info(f"{file.name} appears scanned, so OCR is being used.")
                     docs = load_pdf_with_ocr(tmp_path)
+            elif suffix == "docx":
+                from src.data_loader import load_docx
+                docs = load_docx(tmp_path)
+            elif suffix == "txt":
+                from src.data_loader import load_txt
+                docs = load_txt(tmp_path)
+            elif suffix == "csv":
+                from src.data_loader import load_csv
+                docs = load_csv(tmp_path)
             else:
                 text = load_image_text(tmp_path)
                 docs = (
@@ -665,12 +674,12 @@ with st.sidebar:
     with st.expander("Upload Documents", expanded=True):
         uploaded_files = st.file_uploader(
             "Upload Documents",
-            type=["pdf", "png", "jpg", "jpeg"],
+            type=["pdf", "png", "jpg", "jpeg", "docx", "txt", "csv"],
             accept_multiple_files=True,
             label_visibility="collapsed",
             key=f"doc_uploader_{st.session_state.current_chat}",
         )
-        st.caption("PDF · PNG · JPG · JPEG")
+        st.caption("PDF · Word · Text · CSV · Images")
 
     store = get_document_store()
     if store and store.source_count() > 0:
@@ -678,6 +687,25 @@ with st.sidebar:
         st.markdown(
             f'<div class="upload-note">✓ {store.source_count()} source(s) · {total_chunks} chunks in this chat</div>',
             unsafe_allow_html=True,
+        )
+        if st.button("Summarize Documents", use_container_width=True):
+            st.session_state.pending_query = "Please provide a comprehensive summary of the uploaded documents."
+            st.rerun()
+
+    st.markdown('<div class="side-divider"></div>', unsafe_allow_html=True)
+    if st.session_state.current_chat and st.session_state.all_chats.get(st.session_state.current_chat, {}).get("messages"):
+        chat_data = st.session_state.all_chats[st.session_state.current_chat]
+        export_text = f"# {chat_data['title']}\n\n"
+        for msg in chat_data['messages']:
+            role = "User" if msg["role"] == "user" else "Assistant"
+            export_text += f"**{role}**:\n{msg['content']}\n\n"
+        
+        st.download_button(
+            label="Download Chat",
+            data=export_text,
+            file_name=f"{chat_data['title'].replace(' ', '_').lower()}.md",
+            mime="text/markdown",
+            use_container_width=True
         )
 
 
@@ -691,7 +719,7 @@ if uploaded_files:
             if processed:
                 store = get_document_store()
                 if store is None:
-                    store = SessionVectorStore(get_embeddings(mode="tfidf"))
+                    store = SessionVectorStore(get_embeddings(mode="transformer"))
                     if st.session_state.current_chat:
                         st.session_state.chat_stores[st.session_state.current_chat] = store
                     else:
@@ -759,21 +787,32 @@ if query:
         except Exception as exc:
             st.error(f"Could not generate an answer. Check GROQ_API_KEY. ({exc})")
             answer = "Sorry, I could not generate an answer."
-
-        local_sources = []
+        local_sources = {}
         web_used = False
         for doc in source_docs:
-            src = (doc.metadata or {}).get("source")
+            meta = doc.metadata or {}
+            src = meta.get("source")
+            page = meta.get("page")
+            
             if src == "web_search":
                 web_used = True
             elif src:
-                local_sources.append(src)
+                if src not in local_sources:
+                    local_sources[src] = set()
+                if page is not None:
+                    local_sources[src].add(str(page))
 
         if local_sources:
-            chips = "".join(
-                f'<span class="cite-chip">📄 {s}</span>'
-                for s in dict.fromkeys(local_sources)
-            )
+            chip_htmls = []
+            for src, pages in local_sources.items():
+                if pages:
+                    sorted_pages = sorted(list(pages), key=lambda x: int(x) if x.isdigit() else x)
+                    page_str = f" (Page{'s' if len(pages) > 1 else ''} {', '.join(sorted_pages)})"
+                else:
+                    page_str = ""
+                chip_htmls.append(f'<span class="cite-chip">📄 {src}{page_str}</span>')
+            
+            chips = "".join(chip_htmls)
             st.markdown(f'<div class="cite-row">{chips}</div>', unsafe_allow_html=True)
         elif web_used:
             st.caption("Answer included web search results.")

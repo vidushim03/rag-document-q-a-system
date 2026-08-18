@@ -16,3 +16,8 @@ pytesseract==0.3.13
 pillow==12.3.0
 tavily-python==0.7.27
 portalocker==3.2.0
+python-docx
+sentence-transformers
+transformers
+torch
+docx2txt
