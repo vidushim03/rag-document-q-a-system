@@ -15,7 +15,7 @@ load_dotenv()
 MAX_OCR_PAGES = int(os.getenv("MAX_OCR_PAGES", "5"))
 TESSERACT_CMD = os.getenv("TESSERACT_CMD", "").strip()
 POPPLER_PATH = os.getenv("POPPLER_PATH", "").strip()
-GROQ_OCR_MODEL = os.getenv("GROQ_OCR_MODEL", "qwen/qwen3.6-27b").strip()
+GROQ_OCR_MODEL = os.getenv("GROQ_OCR_MODEL", "llama-3.2-11b-vision-preview").strip()
 
 
 def _configure_local_ocr():
