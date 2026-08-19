@@ -93,11 +93,6 @@ def get_llm():
     return ChatGroq(temperature=0, model_name=model_name)
 
 
-def get_json_llm():
-    model_name = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
-    return ChatGroq(temperature=0, model_name=model_name)
-
-
 def format_history(history):
     """Flatten a list of chat messages into a plain-text transcript."""
     if not history:
@@ -134,16 +129,17 @@ def generate(state: GraphState):
     history = state.get("history", "") or ""
 
     system_parts = [
-        "You are a helpful, friendly assistant. Use the following pieces of retrieved context to answer the user's question.\n"
-        "- Answer based ONLY on the provided context when it contains relevant information.\n"
-        "- Be conversational and approachable — avoid sounding robotic or stiff.\n"
-        "- If the context doesn't cover the question, say so naturally and offer to help with something else.\n"
-        "- You may use markdown formatting (bold, bullet points, code blocks) when it improves readability.\n"
-        "- Do NOT start your response with <think> tags."
+        "You are a helpful assistant. Answer the user's question clearly and directly.\n"
+        "Use the provided context when available to ground your answer in the documents.\n"
+        "If context is empty or doesn't cover the question, answer from your own knowledge.\n"
+        "Keep answers concise. Use markdown when it improves readability."
     ]
     if history:
         system_parts.append("Conversation so far:\n" + history)
-    system_parts.append("Retrieved context:\n{context}")
+    if context:
+        system_parts.append("Retrieved context:\n{context}")
+    else:
+        system_parts.append("No retrieved context available — answer from your own knowledge.")
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", "\n\n".join(system_parts)),
