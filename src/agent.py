@@ -27,20 +27,20 @@ class GraphState(TypedDict):
 
 
 def _strip_think(text: str) -> str:
-    """Remove  thinking... response blocks that some models emit."""
-    return re.sub(r" thinking.*? response", "", text, flags=re.DOTALL).strip() or text.strip()
+    """Remove <think>...</think> blocks that some models emit."""
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip() or text.strip()
 
 
 class _ThinkingFilter:
-    """Statefully strips  thinking... response blocks from a token stream.
+    """Statefully strips <think>...</think> blocks from a token stream.
 
     The regex approach only works on a complete string, so per-token
     stripping lets the tags leak through. This filter buffers a few chars
     to detect markers that may span token boundaries.
     """
 
-    _OPEN = " thinking"
-    _CLOSE = " response"
+    _OPEN = "<think>"
+    _CLOSE = "</think>"
     _OPEN_LEN = len(_OPEN)
     _CLOSE_LEN = len(_CLOSE)
 
