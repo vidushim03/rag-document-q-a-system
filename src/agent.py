@@ -135,12 +135,14 @@ def generate(state: GraphState):
             "Your primary source of truth is the Context below.",
             "Base your answer heavily on the provided context. If the context does not contain the complete answer, you may supplement it with your own knowledge.",
             "Never mention 'context', 'provided context', 'documents', or 'retrieved' in your answer.",
+            "CRITICAL: Do NOT simply echo or repeat the user's question. Provide the requested summary or answer immediately.",
             "Be direct and concise. Use markdown when it improves readability.",
             "Context:\n{context}",
         ]
     else:
         system_parts = [
-            "You are a helpful assistant. Answer directly from your own knowledge.\n"
+            "You are a helpful assistant. Answer directly from your own knowledge.",
+            "CRITICAL: Do NOT simply echo or repeat the user's question. Provide the requested summary or answer immediately.",
             "Be concise. Use markdown when it improves readability.",
         ]
     if history:
@@ -341,9 +343,10 @@ def stream_agent(question: str, db: Any, history=None):
         if mode == "messages":
             chunk, meta = data
             if meta.get("langgraph_node") == "generate" and chunk.content:
-                cleaned = filter_.push(chunk.content)
-                if cleaned:
-                    yield ("token", cleaned)
+                if chunk.__class__.__name__ == "AIMessageChunk" or getattr(chunk, "type", "") == "ai":
+                    cleaned = filter_.push(chunk.content)
+                    if cleaned:
+                        yield ("token", cleaned)
         elif mode == "updates":
             generate_state = data.get("generate")
             if generate_state and generate_state.get("documents"):
