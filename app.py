@@ -789,7 +789,13 @@ if query:
                     source_docs.extend(item[1])
 
         try:
-            answer = st.write_stream(answer_generator())
+            collected = []
+            def display_generator():
+                for token in answer_generator():
+                    collected.append(token)
+                    yield token
+            st.write_stream(display_generator())
+            answer = "".join(collected) if collected else "Sorry, no answer was generated."
         except Exception as exc:
             st.error(f"Could not generate an answer. Check GROQ_API_KEY. ({exc})")
             answer = "Sorry, I could not generate an answer."

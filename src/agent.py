@@ -129,18 +129,20 @@ def generate(state: GraphState):
     history = state.get("history", "") or ""
     context = "\n\n".join([doc.page_content for doc in documents])
 
-    system_parts = [
-        "You are a helpful assistant. Answer the user's question using ONLY the provided context below.\n"
-        "If the context contains relevant information, base your answer entirely on it.\n"
-        "If the context does not contain relevant information, say so and answer from your own knowledge.\n"
-        "Keep answers concise. Use markdown when it improves readability."
-    ]
+    if context:
+        system_parts = [
+            "You are a helpful assistant. Answer the user's question using ONLY the provided context below.\n"
+            "Base your answer entirely on the context. If the context doesn't fully answer, say what you can from it and note what's missing.\n"
+            "Keep answers concise. Use markdown when it improves readability.",
+            "Retrieved context:\n{context}",
+        ]
+    else:
+        system_parts = [
+            "You are a helpful assistant. Answer the user's question from your own knowledge.\n"
+            "Be direct and concise. Use markdown when it improves readability.",
+        ]
     if history:
         system_parts.append("Conversation so far:\n" + history)
-    if context:
-        system_parts.append("Retrieved context:\n{context}")
-    else:
-        system_parts.append("No retrieved context available — answer from your own knowledge.")
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", "\n\n".join(system_parts)),
