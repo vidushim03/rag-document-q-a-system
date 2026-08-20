@@ -53,15 +53,15 @@ class _ThinkingFilter:
         self._pending += token
         emitted = ""
 
-        if self._in_think:
-            close = self._pending.find(self._CLOSE)
-            if close == -1:
-                self._pending = self._pending[-self._CLOSE_LEN:]
-                return ""
-            self._pending = self._pending[close + self._CLOSE_LEN:]
-            self._in_think = False
-
         while True:
+            if self._in_think:
+                close = self._pending.find(self._CLOSE)
+                if close == -1:
+                    self._pending = self._pending[-self._CLOSE_LEN:]
+                    return emitted
+                self._pending = self._pending[close + self._CLOSE_LEN:]
+                self._in_think = False
+            
             open_idx = self._pending.find(self._OPEN)
             if open_idx == -1:
                 keep = self._OPEN_LEN - 1
@@ -90,7 +90,7 @@ class _ThinkingFilter:
 
 def get_llm():
     model_name = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
-    return ChatGroq(temperature=0, model_name=model_name, streaming=True)
+    return ChatGroq(temperature=0, model_name=model_name, streaming=True, max_tokens=8192)
 
 
 def format_history(history):
