@@ -539,29 +539,30 @@ def get_document_store():
 
 
 def render_copy_button(text):
+    btn_id = "btn_" + str(uuid.uuid4()).replace("-", "")
     payload = json.dumps(text).replace("</", "<\\/")
     html = f"""
     <div style="display:flex;justify-content:flex-end;margin-top:10px;margin-bottom:4px;">
-        <button onclick="copyAnswer()" style="background:linear-gradient(135deg,var(--accent),#7c3aed);color:#fff;border:none;border-radius:10px;padding:8px 18px;font-size:0.85rem;font-weight:600;font-family:Inter,sans-serif;cursor:pointer;box-shadow:0 2px 8px var(--accent-glow);transition:transform 0.15s,box-shadow 0.15s;" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 14px var(--accent-glow)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px var(--accent-glow)'">Copy Answer</button>
+        <button id="{btn_id}" onclick="copyAnswer_{btn_id}()" style="background:linear-gradient(135deg,var(--accent),#7c3aed);color:#fff;border:none;border-radius:10px;padding:8px 18px;font-size:0.85rem;font-weight:600;font-family:Inter,sans-serif;cursor:pointer;box-shadow:0 2px 8px var(--accent-glow);transition:transform 0.15s,box-shadow 0.15s;" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 14px var(--accent-glow)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px var(--accent-glow)'">Copy Answer</button>
     </div>
     <script>
-    function copyAnswer() {{
+    function copyAnswer_{btn_id}() {{
         var text = {payload};
         if (navigator.clipboard && navigator.clipboard.writeText) {{
             navigator.clipboard.writeText(text).then(function() {{
-                var btn = document.querySelector('button[onclick="copyAnswer()"]');
+                var btn = document.getElementById('{btn_id}');
                 if (btn) {{
                     var orig = btn.textContent;
                     btn.textContent = 'Copied!';
                     btn.style.background = 'linear-gradient(135deg, #22c55e, #16a34a)';
                     setTimeout(function() {{ btn.textContent = orig; btn.style.background = 'linear-gradient(135deg, var(--accent), #7c3aed)'; }}, 1500);
                 }}
-            }}).catch(function() {{ fallbackCopy(text); }});
+            }}).catch(function() {{ fallbackCopy_{btn_id}(text); }});
         }} else {{
-            fallbackCopy(text);
+            fallbackCopy_{btn_id}(text);
         }}
     }}
-    function fallbackCopy(text) {{
+    function fallbackCopy_{btn_id}(text) {{
         var ta = document.createElement('textarea');
         ta.value = text;
         ta.style.position = 'fixed';
@@ -699,7 +700,7 @@ with st.sidebar:
             f'<div class="upload-note">✓ {store.source_count()} source(s) · {total_chunks} chunks in this chat</div>',
             unsafe_allow_html=True,
         )
-        if st.button("Summarize Documents", use_container_width=True):
+        if st.button("Summarize Documents", type="primary", use_container_width=True):
             st.session_state.pending_query = "Please provide a comprehensive summary of the uploaded documents."
             st.rerun()
 
@@ -768,6 +769,8 @@ for message in messages:
     avatar = "user" if message["role"] == "user" else "assistant"
     with st.chat_message(message["role"], avatar=avatar):
         st.markdown(message["content"])
+        if message["role"] == "assistant":
+            render_copy_button(message["content"])
 
 pending_query = st.session_state.pop("pending_query", None)
 query = st.chat_input("Ask a question about your documents")
