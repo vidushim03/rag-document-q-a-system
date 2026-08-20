@@ -127,6 +127,7 @@ def generate(state: GraphState):
     documents = state.get("documents", [])
     loop_count = state.get("loop_count", 0)
     history = state.get("history", "") or ""
+    context = "\n\n".join([doc.page_content for doc in documents])
 
     system_parts = [
         "You are a helpful assistant. Answer the user's question clearly and directly.\n"
@@ -148,8 +149,6 @@ def generate(state: GraphState):
 
     llm = get_llm()
     rag_chain = prompt | llm | StrOutputParser()
-
-    context = "\n\n".join([doc.page_content for doc in documents])
     generation = rag_chain.invoke({"context": context, "question": question})
     generation = _strip_think(generation)
     return {
