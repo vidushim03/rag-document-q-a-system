@@ -90,7 +90,7 @@ class _ThinkingFilter:
 
 def get_llm():
     model_name = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
-    return ChatGroq(temperature=0, model_name=model_name)
+    return ChatGroq(temperature=0, model_name=model_name, streaming=True)
 
 
 def format_history(history):
@@ -202,9 +202,8 @@ def grade_documents(state: GraphState):
             print("---GRADE: DOCUMENT NOT RELEVANT---")
 
     if not filtered_docs:
-        print("---GRADE: NO DOC MARKED RELEVANT, KEEPING RETRIEVED DOCS---")
-        filtered_docs = list(documents)
-        web_search = False
+        print("---GRADE: NO DOC MARKED RELEVANT, GENERATING WITHOUT CONTEXT---")
+        filtered_docs = []
 
     return {
         "documents": filtered_docs,
