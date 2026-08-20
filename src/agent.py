@@ -131,10 +131,10 @@ def generate(state: GraphState):
 
     if context:
         system_parts = [
-            "You are a helpful assistant.\n"
-            "Use the provided context to answer the question when it contains relevant information.\n"
-            "If the context does not contain enough information, answer from your own knowledge.\n"
-            "Never mention 'context', 'provided context', 'documents', or 'retrieved' in your answer.\n"
+            "You are a helpful assistant.",
+            "Your primary source of truth is the Context below.",
+            "Base your answer heavily on the provided context. If the context does not contain the complete answer, you may supplement it with your own knowledge.",
+            "Never mention 'context', 'provided context', 'documents', or 'retrieved' in your answer.",
             "Be direct and concise. Use markdown when it improves readability.",
             "Context:\n{context}",
         ]
@@ -173,7 +173,8 @@ def grade_documents(state: GraphState):
     llm = get_llm()
     prompt = ChatPromptTemplate.from_messages([
         ("system", "You are a grader assessing the relevance of retrieved documents to a user question. \n"
-                   "A document is relevant if it contains keyword(s) or semantic meaning related to the question. \n"
+                   "A document is relevant if it contains ANY keyword(s), entities, or semantic meaning related to the question. \n"
+                   "When in doubt, grade it as 'yes'. \n"
                    "Provide the output as a JSON object with a single key 'scores'. "
                    "The value must be a dictionary mapping each document index (as a string) to either 'yes' or 'no'."),
         ("human", "User question: {question}\n\nRetrieved documents:\n{documents}"),
@@ -194,8 +195,20 @@ def grade_documents(state: GraphState):
     filtered_docs = []
     web_search = False
     for i, d in enumerate(documents):
-        grade = str(scores.get(str(i), "yes")).lower()
-        if grade == "yes":
+        val = None
+        if str(i) in scores:
+            val = scores[str(i)]
+        elif f"Document {i}" in scores:
+            val = scores[f"Document {i}"]
+        elif f"document {i}" in scores:
+            val = scores[f"document {i}"]
+            
+        if val is None:
+            grade = "yes"
+        else:
+            grade = str(val).lower()
+            
+        if "yes" in grade or "true" in grade:
             print("---GRADE: DOCUMENT RELEVANT---")
             filtered_docs.append(d)
         else:
