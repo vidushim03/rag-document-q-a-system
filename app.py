@@ -421,6 +421,7 @@ def build_chat_history(messages):
 def load_chats():
     bridge = st.query_params.get(CHATS_BRIDGE_PARAM)
     if bridge:
+        st.session_state.persistence_bridge_rendered = True
         st.query_params.clear()
         try:
             chats = json.loads(bridge)
@@ -577,6 +578,10 @@ def render_copy_button(text):
 
 def render_chat_persistence_bridge():
     """If the browser has saved chats, hand them to the app once via a URL redirect."""
+    if st.session_state.get("persistence_bridge_rendered"):
+        return
+    st.session_state.persistence_bridge_rendered = True
+    
     payload = json.dumps(st.session_state.all_chats).replace("</", "<\\/")
     html = f"""
     <script>
