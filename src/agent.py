@@ -130,9 +130,9 @@ def generate(state: GraphState):
     context = "\n\n".join([doc.page_content for doc in documents])
 
     system_parts = [
-        "You are a helpful assistant. Answer the user's question clearly and directly.\n"
-        "Use the provided context when available to ground your answer in the documents.\n"
-        "If context is empty or doesn't cover the question, answer from your own knowledge.\n"
+        "You are a helpful assistant. Answer the user's question using ONLY the provided context below.\n"
+        "If the context contains relevant information, base your answer entirely on it.\n"
+        "If the context does not contain relevant information, say so and answer from your own knowledge.\n"
         "Keep answers concise. Use markdown when it improves readability."
     ]
     if history:
