@@ -131,15 +131,17 @@ def generate(state: GraphState):
 
     if context:
         system_parts = [
-            "You are a helpful assistant. Answer the user's question using ONLY the provided context below.\n"
-            "Base your answer entirely on the context. If the context doesn't fully answer, say what you can from it and note what's missing.\n"
-            "Keep answers concise. Use markdown when it improves readability.",
-            "Retrieved context:\n{context}",
+            "You are a helpful assistant.\n"
+            "Use the provided context to answer the question when it contains relevant information.\n"
+            "If the context does not contain enough information, answer from your own knowledge.\n"
+            "Never mention 'context', 'provided context', 'documents', or 'retrieved' in your answer.\n"
+            "Be direct and concise. Use markdown when it improves readability.",
+            "Context:\n{context}",
         ]
     else:
         system_parts = [
-            "You are a helpful assistant. Answer the user's question from your own knowledge.\n"
-            "Be direct and concise. Use markdown when it improves readability.",
+            "You are a helpful assistant. Answer directly from your own knowledge.\n"
+            "Be concise. Use markdown when it improves readability.",
         ]
     if history:
         system_parts.append("Conversation so far:\n" + history)
