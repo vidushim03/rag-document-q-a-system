@@ -572,7 +572,7 @@ def render_copy_button(text):
     }}
     </script>
     """
-    components.html(html, height=60)
+    st.html(html, unsafe_allow_javascript=True)
 
 
 def render_chat_persistence_bridge():
@@ -593,7 +593,7 @@ def render_chat_persistence_bridge():
     }})();
     </script>
     """
-    components.html(html, height=0)
+    st.html(html, unsafe_allow_javascript=True)
 
 
 def persist_chats_localstorage():
@@ -606,7 +606,7 @@ def persist_chats_localstorage():
     }} catch (e) {{}}
     </script>
     """
-    components.html(html, height=0)
+    st.html(html, unsafe_allow_javascript=True)
 
 
 if "all_chats" not in st.session_state:
