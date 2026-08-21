@@ -138,6 +138,7 @@ def generate(state: GraphState):
             "Base your answer heavily on the provided context. If the context does not contain the complete answer, you may supplement it with your own knowledge.",
             "Never mention 'context', 'provided context', 'documents', or 'retrieved' in your answer.",
             "CRITICAL: Do NOT simply echo or repeat the user's question. Provide the requested summary or answer immediately.",
+            "CRITICAL: If the user refers to an image, picture, or screenshot, DO NOT say you cannot view images. The images have already been processed by OCR and their text is included in the context. Answer based on that text.",
             "Be direct and concise. Use markdown when it improves readability.",
             "Context:\n{context}",
         ]
