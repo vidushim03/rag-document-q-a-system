@@ -803,7 +803,8 @@ if query:
                     collected.append(token)
                     yield token
             st.write_stream(display_generator())
-            answer = "".join(collected) if collected else "Sorry, no answer was generated."
+            collected_text = "".join(collected).strip()
+            answer = collected_text if collected_text else "Sorry, no answer was generated."
         except Exception as exc:
             st.error(f"Could not generate an answer. Check GROQ_API_KEY. ({exc})")
             answer = "Sorry, I could not generate an answer."

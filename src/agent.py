@@ -91,8 +91,8 @@ class _ThinkingFilter:
 def get_llm():
     model_name = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
     # Using 2048 to prevent hitting Groq's 8000 TPM limit 
-    # (Requested tokens = Prompt tokens + max_tokens)
-    return ChatGroq(temperature=0, model_name=model_name, streaming=True, max_tokens=2048)
+    # Using 4096 to give more room for <think> blocks while staying under 8000 TPM limit
+    return ChatGroq(temperature=0, model_name=model_name, streaming=True, max_tokens=4096)
 
 
 def format_history(history):
@@ -139,6 +139,7 @@ def generate(state: GraphState):
             "Never mention 'context', 'provided context', 'documents', or 'retrieved' in your answer.",
             "CRITICAL: Do NOT simply echo or repeat the user's question. Provide the requested summary or answer immediately.",
             "CRITICAL: If the user refers to an image, picture, or screenshot, DO NOT say you cannot view images. The images have already been processed by OCR and their text is included in the context. Answer based on that text.",
+            "Keep your reasoning short and concise to avoid hitting output token limits. Output your final answer quickly.",
             "Be direct and concise. Use markdown when it improves readability.",
             "Context:\n{context}",
         ]
