@@ -90,7 +90,9 @@ class _ThinkingFilter:
 
 def get_llm():
     model_name = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
-    return ChatGroq(temperature=0, model_name=model_name, streaming=True, max_tokens=8192)
+    # Using 2048 to prevent hitting Groq's 8000 TPM limit 
+    # (Requested tokens = Prompt tokens + max_tokens)
+    return ChatGroq(temperature=0, model_name=model_name, streaming=True, max_tokens=2048)
 
 
 def format_history(history):
