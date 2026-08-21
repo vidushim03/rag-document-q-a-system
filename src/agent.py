@@ -138,7 +138,7 @@ def generate(state: GraphState):
             "Base your answer heavily on the provided context. If the context does not contain the complete answer, you may supplement it with your own knowledge.",
             "Never mention 'context', 'provided context', 'documents', or 'retrieved' in your answer.",
             "CRITICAL: Do NOT simply echo or repeat the user's question. Provide the requested summary or answer immediately.",
-            "CRITICAL: If the user refers to an image, picture, or screenshot, DO NOT say you cannot view images. The images have already been processed by OCR and their text is included in the context. Answer based on that text.",
+            "CRITICAL: If the user refers to a document, pdf, file, image, or screenshot, DO NOT say you cannot view or access them. They have already been processed and their text is included in the context. Answer based on that text.",
             "Keep your reasoning short and concise to avoid hitting output token limits. Output your final answer quickly.",
             "Be direct and concise. Use markdown when it improves readability.",
             "Context:\n{context}",
@@ -180,6 +180,7 @@ def grade_documents(state: GraphState):
     prompt = ChatPromptTemplate.from_messages([
         ("system", "You are a grader assessing the relevance of retrieved documents to a user question. \n"
                    "A document is relevant if it contains ANY keyword(s), entities, or semantic meaning related to the question. \n"
+                   "If the user is asking a general question about the document itself (e.g., 'summarize', 'what is this document', 'tell me about the pdf', 'what are the questions'), grade ALL documents as 'yes'. \n"
                    "When in doubt, grade it as 'yes'. \n"
                    "Provide the output as a JSON object with a single key 'scores'. "
                    "The value must be a dictionary mapping each document index (as a string) to either 'yes' or 'no'."),
